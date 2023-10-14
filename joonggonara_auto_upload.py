@@ -9,21 +9,23 @@ from selenium.webdriver.common.by import By
 from PIL import Image
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
-from joonggonara_auto_upload import myIdPW # 네이버 ID PW 가 있는 파일
+import myIdPW
 
 
-# #TODO 중고나라 올린 양식대로 게시글을 올리고 설정한 시간마다 다시 글써주는
 class NaverAutoPoster:
     def __init__(self, id, pw):
         self.id = id
         self.pw = pw
-        self.self.driver = self.init_self.driver()
-        self.self.df = pd.read_excel('/Users/kangjoon/WORKSPACE/PYTHON/Macro/joonggonara_auto_upload/joonggonara_macro.xlsx') #TODO 엑셀파일이 있는 경로
-        self.image_directory = "/Users/kangjoon/WORKSPACE/PYTHON/Macro/joonggonara_auto_upload/TrashImage"    #TODO 원본 이미지 저장 경로
-        self.self.save_directory = "/Users/kangjoon/WORKSPACE/PYTHON/Macro/joonggonara_auto_upload/joonggo_img" #TODO 이미지 합치기 저장 경로
-        self.no_up = 0
+        self.driver = self.init_driver()
+        self.df = pd.read_excel('/Users/kangjoon/WORKSPACE/PYTHON/Macro/joonggonara_auto_upload/joonggonara_macro.xlsx')  # TODO 엑셀파일이 있는 경로
+        self.image_directory = "/Users/kangjoon/WORKSPACE/PYTHON/Macro/joonggonara_auto_upload/images"  # TODO 원본 이미지 저장 폴더 경로
+        self.save_directory = "/Users/kangjoon/WORKSPACE/PYTHON/Macro/joonggonara_auto_upload/joonggo_img"  # TODO 이미지 합치기 저장 폴더 경로
+        self.img_format = "jpeg"
+        self.img_width = -1
+        self.img_space = 0
 
-    def init_driver(self): #mac m1 os 에서 셀레니움 4.10.0 을 사용중이다.
+
+    def init_driver(self):  # mac m1 os 에서 셀레니움 4.10.0 을 사용중이다.
         options = Options()
         options.add_argument("start-maximized")
         options.add_argument("--remote-debugging-port=9222")
@@ -33,23 +35,24 @@ class NaverAutoPoster:
         options.add_argument(
             'user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36')
 
-        return self.webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)#크롬드라이버 자동 설치 셀레니움 4.10.0 을 사용중
+        return webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
 
     def login(self):
-        self.self.driver.get('http://cafe.naver.com/joonggonara')
-        login_btn = self.self.driver.find_element(By.ID, 'gnb_login_button')
+        self.driver.get('http://cafe.naver.com/joonggonara')
+        login_btn = self.driver.find_element(By.ID, 'gnb_login_button')
         login_btn.click()
-        self.self.driver.execute_script(f"document.getElementsByName('id')[0].value='{self.id}'") #캡챠 방지를 위해 execute_script
+        time.sleep(0.5)
+        self.driver.execute_script(f"document.getElementsByName('id')[0].value='{self.id}'")
         time.sleep(1)
-        self.self.driver.execute_script(f"document.getElementsByName('pw')[0].value='{self.pw}'")
+        self.driver.execute_script(f"document.getElementsByName('pw')[0].value='{self.pw}'")
         time.sleep(1)
-        self.self.driver.find_element(By.ID, 'log.login').click() # 로그인 버튼을 찾아 클릭
+        self.driver.find_element(By.ID, 'log.login').click()
 
-    def merge_image(self,images_paths, title_name):  # 이미지 합치기
+    def merge_image(self, images_paths, title_name):  # 이미지 합치기
         images = [Image.open(os.path.join(self.image_directory, x.strip())) for x in images_paths]
 
-        if self.self.img_width > -1:
-            image_sizes = [(int(self.self.img_width), int(self.self.img_width * x.size[1] / x.size[0])) for x in images]
+        if self.img_width > -1:
+            image_sizes = [(int(self.img_width), int(self.img_width * x.size[1] / x.size[0])) for x in images]
         else:
             image_sizes = [(x.size[0], x.size[1]) for x in images]
 
@@ -82,17 +85,19 @@ class NaverAutoPoster:
         return result
 
     def post_article(self):
+        no_up = 0
         for i in range(len(self.df.index)):
             time.sleep(0.5)
             if self.df.loc[i, '카테고리'] in ('공연', '연극', '영화'):
                 self.driver.find_element(By.ID, 'menuLink1285').click()
             elif self.df.loc[i, '카테고리'] in ('스포츠'):
                 self.driver.find_element(By.ID, 'menuLink1286').click()
-
+            elif self.df.loc[i,'카테고리'] in ('남성패션','남성잡화'):
+                self.driver.find_element(By.ID, 'menuLink358').click()
             self.driver.switch_to.frame('cafe_main')  # 중요 Iframe 을 바꿔야해
             self.driver.find_element(By.ID, 'writeFormBtn').click()  # 글쓰기
-            self.driver.switch_to.window(self.driver.window_handles[i + 1 - self.no_up])
-
+            self.driver.switch_to.window(self.driver.window_handles[i + 1 - no_up])
+            time.sleep(1)
             self.driver.find_element(By.CLASS_NAME, 'textarea_input').send_keys(self.df.loc[i, '상품명'])
             time.sleep(0.5)
             self.driver.find_element(By.CLASS_NAME, 'input_text').send_keys(int(self.df.loc[i, '판매가격']))
@@ -139,20 +144,21 @@ class NaverAutoPoster:
 
             # 설정한 경로에 사진 통합 이미지가 있으면 그냥 사용하고, 없으면 merge_image() 함수로 여러장의 사진을 한장으로 통합합니다.
 
-            search_path = '/Users/kangjoon/Desktop/seller/Resale/joonggo_img'
-            file_with_000 = [f for f in os.listdir(search_path) if
-                             title_name in f and f.endswith((".png", ".jpg", ".jpeg"))]
+            # search_path = '/Users/kangjoon/Desktop/seller/Resale/joonggo_img'
+
+            file_with_000 = [f for f in os.listdir(self.save_directory) if
+                        title_name in f and f.endswith((".png", ".jpg", ".jpeg"))]
             file_found = False
             for file in file_with_000:
-                full_file_path = self.find_files(file, search_path)
+                full_file_path = self.find_files(file, self.save_directory)
                 for f in full_file_path:
                     print(f)
                     file_found = True
 
-            if file_found:
-                image = os.path.join(search_path, title_name + '.' + self.img_format)
+            if file_found: # 만들어진 파일이 있으면
+                image = os.path.join(self.save_directory, title_name + '.' + self.img_format)
                 file_found = False
-            else:
+            else: #없으면
                 image = self.merge_image(images_paths, title_name)
 
             input_file_element = self.driver.find_element(By.ID, 'hidden-file')
@@ -172,7 +178,7 @@ class NaverAutoPoster:
 
     def run(self):
         self.login()
-        for i in range(len(self.self.df.index)):
+        for i in range(len(self.df.index)):
             self.post_article()
             time.sleep(random.uniform(20, 50))
 

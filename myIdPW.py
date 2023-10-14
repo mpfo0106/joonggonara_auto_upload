@@ -1,2 +1,2 @@
-naver_id = "mpfo551"
-naver_pw = "joonho0786!"
+naver_id = "id"
+naver_pw = "pw"
